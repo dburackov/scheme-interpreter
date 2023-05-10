@@ -1,4 +1,5 @@
 #include "Object.h"
+#include "Scope.h"
 
 #include <utility>
 
@@ -22,11 +23,11 @@ const std::string &Name::getName() const {
     return name;
 }
 
-std::unordered_map<std::string, std::shared_ptr<Object>> table;
+Scope scope;
 
 std::shared_ptr<Object> Name::eval() {
-    if (table.count(name)) {
-        return table[name];
+    if (scope.count(name)) {
+        return scope.get(name);
     }
     return std::make_shared<Function>(name);
 }
@@ -116,17 +117,34 @@ std::vector<std::shared_ptr<Object>> ConvertToVector(std::shared_ptr<Object> cel
     return to_ret;
 }
 
+void CheckNullptr(std::shared_ptr<Object> ptr) {
+    if (ptr == nullptr) {
+        throw RuntimeError("nullptr issue");
+    }
+}
+
+std::vector<std::shared_ptr<Object>> EvalVector(std::vector<std::shared_ptr<Object>>& args) {
+    std::vector<std::shared_ptr<Object>> result;
+    for (auto it : args) {
+        CheckNullptr(it);
+        result.push_back(it->eval());
+    }
+    return result;
+}
+
+
 std::shared_ptr<Object> Cell::eval() {
     if (!Is<Name>(getFirst())) {
         throw RuntimeError("wrong function name");
     }
     auto function = getFirst()->eval();
+    auto args = ConvertToVector(getSecond());
 
-    if (As<Name>(getFirst())->getName() != "quote") {
-        auto args = ConvertToVector(getSecond());
-        return As<Function>(function)->apply(args);
+    if (scope.count(As<Name>(getFirst())->getName())) {
+        args = EvalVector(args);
     }
-    return getSecond();
+
+    return As<Function>(function)->apply(args);
 }
 
 std::string Cell::serialize() {
@@ -170,28 +188,13 @@ std::shared_ptr<Object> Quote::getValue() {
 }
 
 std::shared_ptr<Object> Quote::eval() {
-    return std::make_shared<Quote>(value);
+    return value;
 }
 
 std::string Quote::serialize() {
-    return value->serialize();
+    return nullptr;
 }
 
-
-void CheckNullptr(std::shared_ptr<Object> ptr) {
-    if (ptr == nullptr) {
-        throw RuntimeError("nullptr issue");
-    }
-}
-
-std::vector<std::shared_ptr<Object>> EvalVector(std::vector<std::shared_ptr<Object>>& args) {
-    std::vector<std::shared_ptr<Object>> result;
-    for (auto it : args) {
-        CheckNullptr(it);
-        result.push_back(it->eval());
-    }
-    return result;
-}
 
 template <typename T>
 void CheckIfValidTypes(std::vector<std::shared_ptr<Object>>& vec) {
@@ -417,18 +420,52 @@ Function::Function(std::string name) {
             to_ret = std::make_shared<Integer>(res);
             return to_ret;
         };
+    } else if (name == "set!") {
+        func = [](std::vector<std::shared_ptr<Object>>& args) {
+            if (args.size() != 2) {
+                throw SyntaxError("set! must contain 2 arguments");
+            }
+            std::shared_ptr<Object> result;
+            if (Is<Name>(args[0])) {
+                if (scope.count(As<Name>(args[0])->getName())) {
+                    scope.set(As<Name>(args[0])->getName(), args[1]->eval());
+                    result = scope.get(As<Name>(args[0])->getName());
+                } else {
+                    throw RuntimeError("unknown name: " + As<Name>(args[0])->getName());
+                }
+            } else {
+                throw SyntaxError("invalid set! syntax");
+            }
+            return result;
+        };
     } else if (name == "define") {
         func = [](std::vector<std::shared_ptr<Object>>& args) {
-            //args = EvalVector(args);
             if (args.size() != 2) {
                 throw SyntaxError("define must contain 2 arguments");
             }
-            if (!Is<Name>(args[0])) {
+            std::shared_ptr<Object> result;
+            if (Is<Name>(args[0])) {
+                scope.add(As<Name>(args[0])->getName(), args[1]->eval());
+                result = scope.get(As<Name>(args[0])->getName());
+            } else if (Is<Cell>(args[0])) {
+                auto decl = ConvertToVector(args[0]);
+                if (!Is<Name>(decl[0])) {
+                    throw SyntaxError("invalid function declaration");
+                }
+                std::vector<std::string> par;
+                for (int i = 1; i < decl.size(); ++i) {
+                    if (!Is<Name>(decl[i])) {
+                        throw SyntaxError("invalid function declaration");
+                    }
+                    par.push_back(As<Name>(decl[i])->getName());
+                }
+                auto f = std::make_shared<Function>(args[1], par);
+                scope.add(As<Name>(decl[0])->getName(), f);
+                result = std::make_shared<Cell>();
+            } else {
                 throw SyntaxError("invalid define syntax");
             }
-            table[As<Name>(args[0])->getName()] = args[1]->eval();
-            std::shared_ptr<Object> to_ret = table[As<Name>(args[0])->getName()];
-            return to_ret;
+            return result;
         };
     } else if (name == "if") {
         func = [](std::vector<std::shared_ptr<Object>>& args) {
@@ -460,13 +497,15 @@ Function::Function(std::string name) {
         };
     } else if (name == "begin") {
         func = [](std::vector<std::shared_ptr<Object>>& args) {
+            scope.extend();
             args = EvalVector(args);
             std::shared_ptr<Object> to_ret;
-            if (args.size() == 0) {
+            if (args.empty()) {
                 to_ret = std::make_shared<Cell>();
+                scope.pop();
                 return to_ret;
-                //throw RuntimeError("unspecified return value");
             }
+            scope.pop();
             return args.back();
         };
     } else if (name == "min") {
@@ -569,27 +608,30 @@ Function::Function(std::string name) {
         func = [](std::vector<std::shared_ptr<Object>>& args) {
             args = EvalVector(args);
             CheckIfBadArgsCount(args, {}, {1});
-            CheckIfValidTypes<Cell>(args);
             std::shared_ptr<Object> to_ret;
-            bool res = false;
-            auto cell = As<Cell>(args.front())->getFirst();
-            if (cell == nullptr) {
-                res = true;
-            } else {
-                while (true) {
-                    auto ptr_first = As<Cell>(cell)->getFirst();
-                    auto ptr_second = As<Cell>(cell)->getSecond();
-                    if (ptr_second == nullptr) {
-                        res = true;
-                        break;
+            if (Is<Cell>(args[0])) {
+                bool res = false;
+                auto cell = As<Cell>(args.front())->getFirst();
+                if (cell == nullptr) {
+                    res = true;
+                } else {
+                    while (true) {
+                        auto ptr_first = As<Cell>(cell)->getFirst();
+                        auto ptr_second = As<Cell>(cell)->getSecond();
+                        if (ptr_second == nullptr) {
+                            res = true;
+                            break;
+                        }
+                        if (Is<Integer>(ptr_second)) {
+                            break;
+                        }
+                        cell = ptr_second;
                     }
-                    if (Is<Integer>(ptr_second)) {
-                        break;
-                    }
-                    cell = ptr_second;
                 }
+                to_ret = std::make_shared<Bool>(res);
+            } else {
+                to_ret = std::make_shared<Bool>(false);
             }
-            to_ret = std::make_shared<Bool>(res);
             return to_ret;
         };
     } else if (name == "cons") {
@@ -599,7 +641,19 @@ Function::Function(std::string name) {
             //std::shared_ptr<Object> to_ret;
             //auto dot = std::make_shared<Dot>();
             //args.insert(++args.begin(), dot);
-            return ListASTFromVector(args);
+            for (int i = 0; i < 2; ++i) {
+                if (!Is<Cell>(args[i])) {
+                    auto tmp = std::make_shared<Cell>();
+                    tmp->getFirst() = args[i];
+                    args[i] = tmp;
+                }
+            }
+            auto first = ConvertToVector(args[0]);
+            auto second = ConvertToVector(args[1]);
+            for (int i = 0; i < second.size(); ++i) {
+                first.push_back(second[i]);
+            }
+            return ListASTFromVector(first);
         };
     } else if (name == "car") {
         func = [](std::vector<std::shared_ptr<Object>>& args) {
@@ -629,6 +683,7 @@ Function::Function(std::string name) {
         };
     } else if (name == "list") {
         func = [](std::vector<std::shared_ptr<Object>>& args) {
+            args = EvalVector(args);
             std::shared_ptr<Object> to_ret;
             return ListASTFromVector(args);
         };
@@ -682,12 +737,10 @@ Function::Function(std::string name) {
             list_vec[ind] = std::make_shared<Integer>(As<Integer>(args.back())->getValue());
             return ListASTFromVector(list_vec);
         };
-    } else {
-        if (table.count(name)) {
+    } else if (scope.count(name)) {
 
-        } else {
-            throw RuntimeError("unknown name: " + name);
-        }
+    } else {
+        throw RuntimeError("unknown name: " + name);
     }
 }
 
@@ -701,4 +754,20 @@ std::string Function::serialize() {
 
 std::shared_ptr<Object> Function::apply(std::vector<std::shared_ptr<Object>> args) {
     return func(args);
+}
+
+Function::Function(std::shared_ptr<Object> body, std::vector<std::string> params) {
+    func = [params, body](std::vector<std::shared_ptr<Object>>& args) {
+        scope.re();
+        if (args.size() != params.size()) {
+            throw RuntimeError("wrong args number in function");
+        }
+        args = EvalVector(args);
+        for (int i = 0; i < args.size(); ++i) {
+            scope.add(params[i], args[i]);
+        }
+        std::shared_ptr<Object> result = body->eval();
+        scope.pop();
+        return result;
+    };
 }

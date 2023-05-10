@@ -8,7 +8,9 @@ add_library(scheme-lib
         scheme/Object.cpp
         scheme/Parser.cpp
         scheme/Scheme.cpp
-        scheme/Scheme.h)
+        scheme/Scheme.h
+        scheme/Scope.cpp
+        scheme/Scope.h)
 
 add_executable(scheme
         main.cpp)

@@ -71,6 +71,8 @@ class Function : public Object {
 public:
     explicit Function(std::string name);
 
+    Function(std::shared_ptr<Object>, std::vector<std::string>);
+
     std::shared_ptr<Object> eval() override;
     std::string serialize() override;
 
@@ -78,8 +80,22 @@ public:
 
 private:
     std::function<std::shared_ptr<Object>(std::vector<std::shared_ptr<Object>>&)> func;
+
+//    std::shared_ptr<Object> body;
+//    std::vector<std::string> params;
 };
 
+//class Func : public Object {
+//public:
+//    explicit Func();
+//
+//    std::shared_ptr<Object> eval() override;
+//    std::string serialize() override;
+//
+//private:
+//    std::shared_ptr<Object> body;
+//    std::vector<std::string> args;
+//};
 
 class Dot : public Object {
 public:
@@ -116,28 +132,6 @@ public:
 private:
     std::shared_ptr<Object> first = nullptr;
     std::shared_ptr<Object> second = nullptr;
-};
-
-class Table {
-public:
-
-    static std::shared_ptr<Object> get(const std::string& name) {
-        if (table.count(name)) {
-            return table[name];
-        }
-        return nullptr;
-    }
-
-    static void add(const std::string& name, std::shared_ptr<Object> value) {
-        table[name] = value;
-    }
-
-    static int count(const std::string& name) {
-        return table.count(name);
-    }
-
-public:
-    static std::unordered_map<std::string, std::shared_ptr<Object>> table;
 };
 
 //===============================================//
