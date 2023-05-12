@@ -61,10 +61,6 @@ std::shared_ptr<Object> read(Tokenizer* tokenizer) {
     }
     if (std::holds_alternative<QuoteToken>(token)) {
         return std::make_shared<Quote>(read(tokenizer));
-//        std::string str("quote");
-//        auto first = std::make_shared<Name>(str);
-//        auto result = std::make_shared<Cell>();
-//        As<Cell>(result)->getFirst() = first;
     }
     if (IsOpenBracket(token)) {
         return readList(tokenizer);

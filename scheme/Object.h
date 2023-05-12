@@ -81,21 +81,7 @@ public:
 private:
     std::function<std::shared_ptr<Object>(std::vector<std::shared_ptr<Object>>&)> func;
 
-//    std::shared_ptr<Object> body;
-//    std::vector<std::string> params;
 };
-
-//class Func : public Object {
-//public:
-//    explicit Func();
-//
-//    std::shared_ptr<Object> eval() override;
-//    std::string serialize() override;
-//
-//private:
-//    std::shared_ptr<Object> body;
-//    std::vector<std::string> args;
-//};
 
 class Dot : public Object {
 public:

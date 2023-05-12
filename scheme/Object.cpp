@@ -195,6 +195,19 @@ std::string Quote::serialize() {
     return nullptr;
 }
 
+bool equal(std::shared_ptr<Object> fi, std::shared_ptr<Object> se) {
+    bool result = false;
+    if (Is<Integer>(fi) && Is<Integer>(se)) {
+        result = As<Integer>(fi)->getValue() == As<Integer>(se)->getValue();
+    }
+    if (Is<Bool>(fi) && Is<Bool>(se)) {
+        result = As<Bool>(fi)->getBool() == As<Bool>(se)->getBool();
+    }
+    if (Is<Char>(fi) && Is<Char>(se)) {
+        result = As<Char>(fi)->getChar() == As<Char>(se)->getChar();
+    }
+    return result;
+}
 
 template <typename T>
 void CheckIfValidTypes(std::vector<std::shared_ptr<Object>>& vec) {
@@ -258,16 +271,16 @@ std::shared_ptr<Object> ListASTFromVector(std::vector<std::shared_ptr<Object>> l
 
 Function::Function(std::string name) {
     if (name == "quote") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) { return nullptr; };
+        func = [](std::vector<std::shared_ptr<Object>> &args) { return nullptr; };
     } /*NUMBER FUNCTIONS*/ else if (name == "number?") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             std::shared_ptr<Object> result;
             result = std::make_shared<Bool>(Is<Integer>(args.front()));
             return result;
         };
     } else if (name == "=") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             std::shared_ptr<Object> result;
@@ -285,7 +298,7 @@ Function::Function(std::string name) {
             return result;
         };
     } else if (name == ">") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             std::shared_ptr<Object> result;
@@ -303,7 +316,7 @@ Function::Function(std::string name) {
             return result;
         };
     } else if (name == "<") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             std::shared_ptr<Object> result;
@@ -321,7 +334,7 @@ Function::Function(std::string name) {
             return result;
         };
     } else if (name == "<=") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             std::shared_ptr<Object> result;
@@ -339,7 +352,7 @@ Function::Function(std::string name) {
             return result;
         };
     } else if (name == ">=") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             std::shared_ptr<Object> result;
@@ -357,7 +370,7 @@ Function::Function(std::string name) {
             return result;
         };
     } else if (name == "+") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             std::shared_ptr<Object> to_ret;
@@ -369,7 +382,7 @@ Function::Function(std::string name) {
             return to_ret;
         };
     } else if (name == "*") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             std::shared_ptr<Object> to_ret;
@@ -381,7 +394,7 @@ Function::Function(std::string name) {
             return to_ret;
         };
     } else if (name == "-") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             CheckIfBadArgsCount(args, {0}, {});
@@ -394,7 +407,7 @@ Function::Function(std::string name) {
             return to_ret;
         };
     } else if (name == "/") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             CheckIfBadArgsCount(args, {0}, {});
@@ -407,7 +420,7 @@ Function::Function(std::string name) {
             return to_ret;
         };
     } else if (name == "max") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfValidTypes<Integer>(args);
             CheckIfBadArgsCount(args, {0}, {});
@@ -420,8 +433,18 @@ Function::Function(std::string name) {
             to_ret = std::make_shared<Integer>(res);
             return to_ret;
         };
+    } else if (name == "eq?") {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
+            args = EvalVector(args);
+            CheckIfBadArgsCount(args, {0}, {});
+            bool result = true;
+            for (int i = 0; i < args.size() - 1; ++i) {
+                result &= equal(args[i], args[i + 1]);
+            }
+            return std::make_shared<Bool>(result);
+        };
     } else if (name == "set!") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             if (args.size() != 2) {
                 throw SyntaxError("set! must contain 2 arguments");
             }
@@ -439,7 +462,7 @@ Function::Function(std::string name) {
             return result;
         };
     } else if (name == "define") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             if (args.size() != 2) {
                 throw SyntaxError("define must contain 2 arguments");
             }
@@ -468,7 +491,7 @@ Function::Function(std::string name) {
             return result;
         };
     } else if (name == "if") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             if (args.size() == 0) {
                 throw SyntaxError("expected condition in if statement");
             } else if (args.size() == 1) {
@@ -494,6 +517,44 @@ Function::Function(std::string name) {
             }
             //CheckIfBadArgsCount(args, {}, {2, 3});
             return args[2]->eval();
+        };
+    } else if (name == "case") {
+        func = [](std::vector<std::shared_ptr<Object>>& args) {
+            CheckIfBadArgsCount(args, {0}, {});
+            bool br = false;
+            for (int i = 1; i < args.size() && !br; ++i)  {
+                if (!Is<Cell>(args[i])) {
+                    throw SyntaxError("invalid case statement");
+                }
+                auto curr = ConvertToVector(args[i]);
+                CheckIfBadArgsCount(curr, {}, {2, 3});
+                if (Is<Name>(curr[0])) {
+                    if (As<Name>(curr[0])->getName() == "default") {
+                        curr[1]->eval();
+                        if (curr.size() == 3) {
+                            if (Is<Name>(curr[2]) && As<Name>(curr[2])->getName() == "break") {
+                                br = true;
+                                break;
+                            } else {
+                                throw SyntaxError("invalid case statement");
+                            }
+                        }
+                        continue;
+                    }
+                }
+                if (equal(args[0]->eval(), curr[0]->eval())) {
+                    curr[1]->eval();
+                    if (curr.size() == 3) {
+                        if (Is<Name>(curr[2]) && As<Name>(curr[2])->getName() == "break") {
+                            br = true;
+                            break;
+                        } else {
+                            throw SyntaxError("invalid case statement");
+                        }
+                    }
+                }
+            }
+            return std::make_shared<Cell>();
         };
     } else if (name == "begin") {
         func = [](std::vector<std::shared_ptr<Object>>& args) {
@@ -529,6 +590,24 @@ Function::Function(std::string name) {
             CheckIfBadArgsCount(args, {}, {1});
             std::shared_ptr<Object> to_ret;
             to_ret = std::make_shared<Integer>(std::abs(As<Integer>(args.front())->getValue()));
+            return to_ret;
+        };
+    } else if (name == "even?"){
+        func = [](std::vector<std::shared_ptr<Object>>& args) {
+            args = EvalVector(args);
+            CheckIfValidTypes<Integer>(args);
+            CheckIfBadArgsCount(args, {}, {1});
+            std::shared_ptr<Object> to_ret;
+            to_ret = std::make_shared<Bool>(As<Integer>(args[0])->getValue() % 2 == 0);
+            return to_ret;
+        };
+    } else if (name == "odd?") {
+        func = [](std::vector<std::shared_ptr<Object>>& args) {
+            args = EvalVector(args);
+            CheckIfValidTypes<Integer>(args);
+            CheckIfBadArgsCount(args, {}, {1});
+            std::shared_ptr<Object> to_ret;
+            to_ret = std::make_shared<Bool>(As<Integer>(args[0])->getValue() % 2 == 1);
             return to_ret;
         };
     } /*BOOLEAN FUNCTIONS*/ else if (name == "boolean?") {
@@ -655,8 +734,16 @@ Function::Function(std::string name) {
             }
             return ListASTFromVector(first);
         };
+    } else if (name == "length") {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
+            args = EvalVector(args);
+            CheckIfBadArgsCount(args, {}, {1});
+            CheckIfValidTypes<Cell>(args);
+            args = ConvertToVector(args.front());
+            return std::make_shared<Integer>(args.size());
+        };
     } else if (name == "car") {
-        func = [](std::vector<std::shared_ptr<Object>>& args) {
+        func = [](std::vector<std::shared_ptr<Object>> &args) {
             args = EvalVector(args);
             CheckIfBadArgsCount(args, {}, {1});
             CheckIfValidTypes<Cell>(args);
@@ -762,7 +849,7 @@ Function::Function(std::shared_ptr<Object> body, std::vector<std::string> params
         if (args.size() != params.size()) {
             throw RuntimeError("wrong args number in function");
         }
-        args = EvalVector(args);
+        //args = EvalVector(args);
         for (int i = 0; i < args.size(); ++i) {
             scope.add(params[i], args[i]);
         }
